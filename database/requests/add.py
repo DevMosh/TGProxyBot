@@ -3,25 +3,25 @@ from database.connect import async_session
 from database.models import User, Channel, Proxy
 
 
-async def add_user(tg_id: int, username: str | None = None):
-    """Добавляет пользователя в БД, если его там еще нет."""
+async def add_user(tg_id: int, username: str | None = None, ref_code: str | None = None):
+    """Добавляет пользователя в БД, учитывая реферальный код"""
     async with async_session() as session:
-        # Проверяем, существует ли пользователь с таким tg_id
         result = await session.execute(select(User).where(User.tg_id == tg_id))
         user = result.scalar_one_or_none()
 
         if not user:
             new_user = User(
                 tg_id=tg_id,
-                username=username
+                username=username,
+                is_active=True,
+                ref_code=ref_code # Записываем код только новому пользователю!
             )
             session.add(new_user)
-            await session.commit()
         else:
-            # Если юзернейм поменялся, можно его обновить
+            user.is_active = True
             if user.username != username:
                 user.username = username
-                await session.commit()
+        await session.commit()
 
 
 async def add_channel(channel_id: int, title: str, url: str):

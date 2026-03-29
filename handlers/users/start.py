@@ -1,5 +1,5 @@
 from aiogram import Router, types
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, CommandObject
 
 from database.requests.add import add_user
 from keyboards.reply import main_keyboard
@@ -7,11 +7,15 @@ from keyboards.reply import main_keyboard
 router = Router()
 
 @router.message(CommandStart())
-async def start_command(message: types.Message):
-    # Добавляем или обновляем пользователя в БД
+async def start_command(message: types.Message, command: CommandObject):
+    # Достаем то, что написано после start=
+    ref_code = command.args
+
+    # Передаем код в функцию добавления
     await add_user(
         tg_id=message.from_user.id,
-        username=message.from_user.username
+        username=message.from_user.username,
+        ref_code=ref_code
     )
 
     # Адаптированный текст в стиле твоего примера

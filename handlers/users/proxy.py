@@ -1,3 +1,5 @@
+import asyncio
+
 from aiogram import Router, F, types, Bot
 from database.requests.get import get_all_channels, get_best_proxy
 from keyboards.inline import get_subscription_keyboard, get_proxy_control_keyboard
@@ -81,13 +83,27 @@ async def send_best_proxy(message: types.Message, edit_message: bool = False, ex
         await message.answer(text, reply_markup=markup, disable_web_page_preview=True)
 
 
-# --- Хендлер для кнопки "Выдать другой прокси" ---
 @router.callback_query(F.data.startswith("replace_proxy_"))
 async def replace_proxy_handler(callback: types.CallbackQuery, bot: Bot):
     # Достаем ID прокси, который сейчас видит юзер
     current_proxy_id = int(callback.data.split("_")[2])
 
-    await callback.answer("🔄 Подбираю другой прокси...", show_alert=False)
+    # --- ИЛЛЮЗИЯ ПОДБОРА ---
+    # Список фраз, которые будут сменять друг друга
+    steps = [
+        "🔄 <b>Связываюсь с узлами мониторинга...</b>",
+        "📡 <b>Проверяю доступность резервных шлюзов...</b>",
+        "⚡️ <b>Замеряю минимальный RTT (пинг)...</b>",
+        "💎 <b>Оптимальный сервер найден! Формирую ключ...</b>"
+    ]
 
-    # Вызываем функцию выдачи, передавая exclude_id
+    for step_text in steps:
+        try:
+            await callback.message.edit_text(step_text)
+            await asyncio.sleep(0.6) # Пауза между фразами
+        except Exception:
+            # Если текст не изменился или сообщение удалено — просто идем дальше
+            pass
+
+    # Вызываем финальную выдачу, как и раньше
     await send_best_proxy(callback.message, edit_message=True, exclude_id=current_proxy_id)

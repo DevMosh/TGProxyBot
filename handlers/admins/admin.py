@@ -5,7 +5,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 
 from data.config import ADMIN_IDS
-from database.requests.get import get_all_users, get_all_channels, get_all_proxies
+from database.requests.get import get_all_users, get_all_channels, get_all_proxies, get_users_stats, get_detailed_stats
 from database.requests.add import add_channel, add_proxy
 from database.requests.delete import delete_channel_db, delete_proxy_db
 from keyboards.inline import admin_main_kb, admin_channels_kb, admin_proxies_kb, admin_back_kb
@@ -24,18 +24,37 @@ class AdminState(StatesGroup):
     broadcast = State()
 
 
-# --- ГЛАВНОЕ МЕНЮ АДМИНА ---
+async def get_admin_menu_text() -> str:
+    stats = await get_detailed_stats()
+
+    return (
+        "⚙️ <b>Панель администратора</b>\n\n"
+        "📊 <b>Общая статистика:</b>\n"
+        f"👥 Всего пользователей: <b>{stats['total']}</b>\n"
+        f"🟢 Активных: <b>{stats['active']}</b>\n"
+        f"🔴 Удаленных: <b>{stats['total'] - stats['active']}</b>\n\n"
+        "📈 <b>Новые пользователи:</b>\n"
+        f"Сегодня: <b>+{stats['today']}</b>\n"
+        f"Вчера: <b>+{stats['yesterday']}</b>\n"
+        f"За неделю: <b>+{stats['week']}</b>\n"
+        f"За месяц: <b>+{stats['month']}</b>\n\n"
+        "Выберите действие:"
+    )
+
+
+# Теперь хендлеры будут использовать этот текст
 @router.message(Command("admin"))
 async def admin_start(message: types.Message, state: FSMContext):
     await state.clear()
-    await message.answer("⚙️ <b>Панель администратора</b>\nВыберите действие:", reply_markup=admin_main_kb())
+    text = await get_admin_menu_text()
+    await message.answer(text, reply_markup=admin_main_kb())
 
 
 @router.callback_query(F.data == "admin_main")
 async def admin_main_call(callback: types.CallbackQuery, state: FSMContext):
     await state.clear()
-    await callback.message.edit_text("⚙️ <b>Панель администратора</b>\nВыберите действие:",
-                                     reply_markup=admin_main_kb())
+    text = await get_admin_menu_text()
+    await callback.message.edit_text(text, reply_markup=admin_main_kb())
 
 
 # --- УПРАВЛЕНИЕ КАНАЛАМИ ---
