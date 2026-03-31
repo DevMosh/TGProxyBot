@@ -54,20 +54,20 @@ def admin_channels_kb(channels):
 
 def admin_proxies_kb(proxies_with_ping):
     builder = InlineKeyboardBuilder()
-    for proxy_id, url, ping in proxies_with_ping:
+    # Теперь мы принимаем 4 параметра (добавился is_pinned)
+    for proxy_id, url, ping, is_pinned in proxies_with_ping:
         status = f"{ping} мс 🟢" if ping else "Мертв 🔴"
 
-        # Теперь достаем IP и Порт новой железобетонной функцией
         host, port = parse_proxy_url(url)
-        if host and port:
-            display_name = f"{host}:{port}"  # Будет красиво, например 142.25.12.3:443
-        else:
-            display_name = url[:20] + "..."
+        display_name = f"{host}:{port}" if host and port else url[:20] + "..."
 
-        builder.row(types.InlineKeyboardButton(
-            text=f"❌ {display_name} | {status}",
-            callback_data=f"del_prx_{proxy_id}"
-        ))
+        pin_btn_text = "📍 Открепить" if is_pinned else "📌 Закрепить"
+
+        # Делаем 2 кнопки в ряд: [Закреп] и [Удалить]
+        builder.row(
+            types.InlineKeyboardButton(text=pin_btn_text, callback_data=f"pin_prx_{proxy_id}"),
+            types.InlineKeyboardButton(text=f"❌ {display_name} | {status}", callback_data=f"del_prx_{proxy_id}")
+        )
 
     builder.row(types.InlineKeyboardButton(text="➕ Добавить прокси", callback_data="add_proxy"))
     builder.row(types.InlineKeyboardButton(text="🔙 Назад", callback_data="admin_main"))

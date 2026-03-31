@@ -24,7 +24,6 @@ async def get_best_proxy(exclude_id: int = None):
     async with async_session() as session:
         query = select(Proxy).where(Proxy.is_active == True)
 
-        # Если юзер просит замену, исключаем его текущий прокси из поиска
         if exclude_id is not None:
             query = query.where(Proxy.id != exclude_id)
 
@@ -34,6 +33,12 @@ async def get_best_proxy(exclude_id: int = None):
         if not proxies:
             return None
 
+        # 1. ПРОВЕРЯЕМ ЗАКРЕПЛЕННЫЙ ПРОКСИ
+        for p in proxies:
+            if p.is_pinned:
+                return p # Сразу отдаем его, не глядя на пинг и аптайм!
+
+        # 2. ОБЫЧНАЯ ЛОГИКА ВЫДАЧИ (если закрепленного нет)
         stable_proxies = []
         for p in proxies:
             uptime = (p.success_checks / p.total_checks * 100) if p.total_checks > 0 else 100

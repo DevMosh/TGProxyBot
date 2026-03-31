@@ -8,6 +8,7 @@ from data.config import ADMIN_IDS
 from database.requests.get import get_all_users, get_all_channels, get_all_proxies, get_users_stats, get_detailed_stats
 from database.requests.add import add_channel, add_proxy
 from database.requests.delete import delete_channel_db, delete_proxy_db
+from database.requests.update import toggle_pin_proxy
 from keyboards.inline import admin_main_kb, admin_channels_kb, admin_proxies_kb, admin_back_kb
 from utils.ping import ping_proxy
 
@@ -107,10 +108,10 @@ async def show_proxies(callback: types.CallbackQuery):
     # Асинхронно проверяем пинг для всех прокси
     for proxy in proxies:
         ping = await ping_proxy(proxy.url)
-        proxies_with_ping.append((proxy.id, proxy.url, ping))
+        proxies_with_ping.append((proxy.id, proxy.url, ping, proxy.is_pinned))
 
     await callback.message.edit_text(
-        "🌐 <b>Управление прокси</b>\nНажмите на прокси, чтобы удалить его:",
+        "🌐 <b>Управление прокси</b>\nНажмите 📌 для закрепления или ❌ для удаления:",
         reply_markup=admin_proxies_kb(proxies_with_ping)
     )
 
@@ -121,6 +122,14 @@ async def del_proxy_handler(callback: types.CallbackQuery):
     await delete_proxy_db(prx_id)
     await callback.answer("✅ Прокси удален!")
     await show_proxies(callback)
+
+
+@router.callback_query(F.data.startswith("pin_prx_"))
+async def pin_proxy_handler(callback: types.CallbackQuery):
+    prx_id = int(callback.data.split("_")[2])
+    await toggle_pin_proxy(prx_id)
+    await callback.answer("✅ Статус закрепления изменен!")
+    await show_proxies(callback) # Обновляем список
 
 
 @router.callback_query(F.data == "add_proxy")
