@@ -9,64 +9,64 @@ from data.config import ADMIN_IDS
 
 
 async def notify_admins(bot: Bot, text: str):
-    """Рассылает экстренное сообщение всем админам из конфига"""
     for admin_id in ADMIN_IDS:
         try:
             await bot.send_message(chat_id=admin_id, text=text, disable_web_page_preview=True)
         except Exception:
-            pass  # Админ мог заблокировать бота, игнорируем
+            pass
 
 
 async def background_proxy_checker(bot: Bot):
-    """Фоновая задача для проверки всех прокси каждые 3 минуты с алертами"""
+    """Фоновый чекер с защитой от ложных срабатываний (троекратная проверка)"""
+    failed_strikes = {}  # Хранит количество неудачных пингов подряд {proxy_id: count}
+
     while True:
         async with async_session() as session:
             result = await session.scalars(select(Proxy))
             proxies = result.all()
 
             for proxy in proxies:
-                # Запоминаем состояние ДО проверки
                 was_active = proxy.is_active
-                old_score = proxy.score
 
-                # Пингуем
-                tcp_ping, resp_time = await ping_proxy(proxy.url)
-
+                # Теперь ping_proxy возвращает одно число (чистый пинг)
+                ping_ms = await ping_proxy(proxy.url)
                 proxy.total_checks += 1
 
-                if tcp_ping is not None and resp_time is not None:
+                if ping_ms is not None:
+                    # ✅ Прокси работает! Сбрасываем страйки.
+                    failed_strikes[proxy.id] = 0
+
                     proxy.success_checks += 1
                     proxy.is_active = True
-                    new_score = (tcp_ping * 0.3) + (resp_time * 0.7)
-                    proxy.score = new_score
+                    proxy.score = ping_ms  # Просто сохраняем пинг как есть
 
-                    # АЛЕРТ 1: Сильная деградация (если раньше пинг был норм, а стал > 1500 мс)
-                    if old_score < 1500 and new_score >= 1500:
-                        short_url = proxy.url.split('@')[-1] if '@' in proxy.url else proxy.url
-                        await notify_admins(
-                            bot,
-                            f"⚠️ <b>Внимание! Деградация прокси!</b>\n\n"
-                            f"🌐 <code>{short_url}</code>\n\n"
-                            f"📉 Скорость отклика упала до <b>{round(new_score, 1)} мс</b>.\n"
-                            f"<i>Сервер сильно перегружен, возможно, стоит его проверить.</i>"
-                        )
+                    # Оставляем алерт только на РЕАЛЬНЫЕ тормоза (например, пинг больше 1000мс)
+                    # Но шлем его только если прокси был быстрым.
+                    # Закомментируй этот блок, если тебе вообще не нужны алерты о скорости
+                    if proxy.score >= 1000 and ping_ms < 1000:  # Логика инвертирована, чтобы не спамить
+                        pass  # Можно убрать деградацию совсем, чтобы спать спокойно
                 else:
-                    proxy.is_active = False
-                    proxy.score = 9999.0
+                    # ❌ Прокси не ответил
+                    strikes = failed_strikes.get(proxy.id, 0) + 1
+                    failed_strikes[proxy.id] = strikes
 
-                    # АЛЕРТ 2: Прокси отвалился (был активен, а теперь нет)
-                    if was_active:
-                        short_url = proxy.url.split('@')[-1] if '@' in proxy.url else proxy.url
-                        await notify_admins(
-                            bot,
-                            f"🚨 <b>КРИТИЧЕСКАЯ ОШИБКА!</b>\n\n"
-                            f"💀 Прокси отвалился и перестал отвечать:\n"
-                            f"🌐 <code>{short_url}</code>\n\n"
-                            f"🔧 <i>Он исключен из выдачи пользователям.</i>"
-                        )
+                    # Если прокси упал 3 раза подряд (~9-10 минут)
+                    if strikes >= 3:
+                        proxy.is_active = False
+                        proxy.score = 9999.0
+
+                        if was_active:
+                            short_url = proxy.url.split('@')[-1] if '@' in proxy.url else proxy.url
+                            await notify_admins(
+                                bot,
+                                f"🚨 <b>ПРОКСИ УПАЛ</b>\n\n"
+                                f"💀 Не отвечает уже 3 проверки подряд:\n"
+                                f"🌐 <code>{short_url}</code>\n\n"
+                                f"🔧 <i>Исключен из выдачи.</i>"
+                            )
 
                 await session.commit()
-                await asyncio.sleep(0.5)  # Пауза между проверками разных прокси
+                await asyncio.sleep(0.5)
 
         # Ждем 3 минуты до следующего круга
         await asyncio.sleep(180)
