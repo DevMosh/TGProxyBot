@@ -24,33 +24,41 @@ async def get_best_proxy(exclude_id: int = None):
     async with async_session() as session:
         query = select(Proxy).where(Proxy.is_active == True)
 
-        if exclude_id is not None:
-            query = query.where(Proxy.id != exclude_id)
-
         result = await session.scalars(query)
-        proxies = list(result.all())
+        all_proxies = list(result.all())
 
-        if not proxies:
+        if not all_proxies:
             return None
 
-        # 1. ПРОВЕРЯЕМ ЗАКРЕПЛЕННЫЙ ПРОКСИ
-        for p in proxies:
-            if p.is_pinned:
-                return p # Сразу отдаем его, не глядя на пинг и аптайм!
+        # 1. Закреплённый прокси — только если это НЕ ротация
+        if exclude_id is None:
+            for p in all_proxies:
+                if p.is_pinned:
+                    return p
 
-        # 2. ОБЫЧНАЯ ЛОГИКА ВЫДАЧИ (если закрепленного нет)
-        stable_proxies = []
-        for p in proxies:
-            uptime = (p.success_checks / p.total_checks * 100) if p.total_checks > 0 else 100
-            if uptime >= 80 or p.total_checks < 5:
-                stable_proxies.append(p)
-
+        # 2. Фильтр по стабильности
+        stable_proxies = [
+            p for p in all_proxies
+            if (p.success_checks / p.total_checks * 100 if p.total_checks > 0 else 100) >= 80
+            or p.total_checks < 5
+        ]
         if not stable_proxies:
-            stable_proxies = proxies
+            stable_proxies = all_proxies
 
-        stable_proxies.sort(key=lambda x: x.score)
+        # 3. Сортируем стабильно (по score, затем по id для детерминизма)
+        stable_proxies.sort(key=lambda x: (x.score, x.id))
 
-        return stable_proxies[0]
+        # 4. Ротация по кругу: берём следующий после exclude_id
+        if exclude_id is None:
+            return stable_proxies[0]
+
+        ids = [p.id for p in stable_proxies]
+        if exclude_id in ids:
+            idx = ids.index(exclude_id)
+            return stable_proxies[(idx + 1) % len(stable_proxies)]
+        else:
+            # Текущий прокси выпал из стабильных — начинаем сначала
+            return stable_proxies[0]
 
 
 async def get_users_stats() -> tuple[int, int]:

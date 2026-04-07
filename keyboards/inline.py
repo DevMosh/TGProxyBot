@@ -1,3 +1,5 @@
+from urllib.parse import quote
+
 from aiogram import types
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -80,6 +82,22 @@ def get_proxy_control_keyboard(current_proxy_id: int):
         types.InlineKeyboardButton(
             text="🔄 Выдать другой прокси",
             callback_data=f"replace_proxy_{current_proxy_id}"
+        )
+    )
+
+    share_text = (
+        "🔥 Смотри, какой быстрый и бесплатный прокси я нашел! "
+        "Подключайся в один клик 👇\n"
+    )
+    share_url = "https://t.me/Proxytochka_bot?start=share"
+    share_link = (
+        f"https://t.me/share/url?url={quote(share_text)}&text={quote(share_url)}"
+    )
+
+    builder.row(
+        types.InlineKeyboardButton(
+            text="📤 Поделиться прокси",
+            url=share_link
         )
     )
     return builder.as_markup()

@@ -31,7 +31,7 @@ class Proxy(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     url: Mapped[str] = mapped_column(String(255), unique=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    is_pinned: Mapped[bool] = mapped_column(Boolean, server_default=text("0"))
+    is_pinned: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("0"))
 
     # Новые метрики
     score: Mapped[float] = mapped_column(Float, default=9999.0)  # Чем меньше, тем лучше
